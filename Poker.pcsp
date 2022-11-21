@@ -34,27 +34,22 @@ var player_stack = starting_stack;
 var opp_stack = starting_stack;
 var pot = 0;
 var highest_bet = big_blind_bet;
-var player_hand:{1..91} = 4;
+var player_hand:{1..91} = 46;
 var opp_hand = 1;
 var winner = na;
 var profit = 0;
 var move_counter = 0;
 var final = false;
 
-OppMove = OppMoveBalancedBluff; // OppMoveBalancedBluff, OppMoveAggressiveBluff, OppMoveConservativeBluff
+OppMove = OppMoveConservativeBluff; // OppMoveBalancedBluff, OppMoveAggressiveBluff, OppMoveConservativeBluff
 
-PreFlop = AssignBlinds; DealHoleCards; if (player_blind == small_blind) { PlayerMove } else { OppMove };
-AssignBlinds = assign_blinds{player_blind = small_blind} -> PlaceMinBet; // assume player is always small blind
-//AssignBlinds = []i:{big_blind, small_blind}@ assign_blinds{player_blind = i} -> PlaceMinBet; // randomly assign a blind to both players
+PreFlop = AssignBlinds; DealHoleCards; PlayerMove;// [] [player_blind == big_blind] OppMove);
+AssignBlinds = assign_blinds{player_blind = small_blind} -> PlaceMinBet; // Assume player is always small blind
+//AssignBlinds = []i:{big_blind, small_blind}@ assign_blinds{player_blind = i} -> PlaceMinBet; // Randomly assign a blind to both players
 PlaceMinBet = bet{
     pot = pot + small_blind_bet + big_blind_bet;
-    if (player_blind == small_blind) {
-	    player_stack = player_stack - small_blind_bet;
-	    opp_stack = opp_stack - big_blind_bet;
-    } else {
-	    player_stack = player_stack - big_blind_bet;
-	    opp_stack = opp_stack - small_blind_bet;
-    }
+	player_stack = player_stack - small_blind_bet;
+	opp_stack = opp_stack - big_blind_bet;
 } -> Skip;
 
 DealHoleCards = pcase {
@@ -153,15 +148,15 @@ DealHoleCards = pcase {
 Move = move{ move_counter++ } -> atomic{ if (move_counter >= move_limit) { Showdown } else { Skip } };
 
 PlayerBet = player_bet{ var add_bet = highest_bet - (starting_stack - player_stack); player_stack = player_stack - add_bet; pot = pot + add_bet; } -> Skip;
-PlayerMove = Call [] [move_counter + 1 < move_limit] Raise(raise_size_1);
+PlayerMove = Call [] [move_counter + 1 < move_limit] Raise(raise_size_1) [] [move_counter + 1 < move_limit] Raise(raise_size_2) [] [move_counter + 1 < move_limit] Raise(raise_size_3);
 Fold = player_fold{ winner = opponent; move_counter++; } -> DistributePot;
-Call = PlayerBet; Move; if (move_counter <= 1) { OppMove } else { Showdown };
-Raise(size) = player_raise.size{ highest_bet = highest_bet + size; } -> Skip; PlayerBet; Move; OppMove;
+Call = PlayerBet; Move; OppMove;
+Raise(size) = raise{ highest_bet = highest_bet + size; } -> Skip; PlayerBet; Move; OppMove;
 
 OppBet = opp_bet{ var add_bet = highest_bet - (starting_stack - opp_stack); opp_stack = opp_stack - add_bet; pot = pot + add_bet; } -> Skip;
 OppFold = opp_fold{ winner = player; move_counter++; } -> DistributePot;
-OppCall = OppBet; Move; if (move_counter <= 1) { PlayerMove } else { Showdown };
-OppRaise(size) = opp_raise.size{ highest_bet = highest_bet + size } -> Skip; OppBet; Move; PlayerMove;
+OppCall = OppBet; Move; if (move_counter > 1) { Showdown };
+OppRaise(size) = raise{ highest_bet = highest_bet + size } -> Skip; OppBet; Move; PlayerMove;
 
 OppMoveBalanced = pcase {
     1 : OppCall 
@@ -216,8 +211,6 @@ EndGame = end -> EndGame;
 #define player_win winner == player && final;
 #assert PreFlop reaches player_win with prob;
 #define player_win_profit profit > 0 && final;
-#define reach_final final;
-#assert PreFlop reaches reach_final;
 #assert PreFlop reaches player_win_profit with prob;
 #assert PreFlop deadlockfree;
 #assert PreFlop reaches player_win_profit with max(profit);
@@ -239,7 +232,7 @@ EndGame = end -> EndGame;
 #define player_win_14 profit == 14 && final;
 #assert PreFlop reaches player_win_14 with prob;
 
-#define player_lose_2 profit == -1 && final;
+#define player_lose_2 profit == -2 && final;
 #assert PreFlop reaches player_lose_2 with prob;
 #define player_lose_4 profit == -4 && final;
 #assert PreFlop reaches player_lose_4 with prob;
